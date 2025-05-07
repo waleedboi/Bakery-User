@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "1036014210330",
+    "project_id": "ecomm-ff529",
+    "storage_bucket": "ecomm-ff529.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1036014210330:android:2a8fd060448163c34570a3",
+        "android_client_info": {
+          "package_name": "com.eample.ecomm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAafWIziFx5vqXzc6hRb137lKCCHwOpJs0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1036014210330:android:7bfb42b36058d90b4570a3",
+        "android_client_info": {
+          "package_name": "com.example.completefoodorderingappui"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAafWIziFx5vqXzc6hRb137lKCCHwOpJs0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1036014210330:android:009fdd70267533444570a3",
+        "android_client_info": {
+          "package_name": "com.example.ecomm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAafWIziFx5vqXzc6hRb137lKCCHwOpJs0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
