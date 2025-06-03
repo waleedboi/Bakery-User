@@ -1,9 +1,9 @@
 import 'package:completefoodorderingappui/view/orders_screen/provider/order_provider.dart';
 import 'package:completefoodorderingappui/view/orders_screen/widgets/bakery_rating.dart';
+import 'package:completefoodorderingappui/view/orders_screen/widgets/noorder.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
-import '../../utilis/utilis.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -19,7 +19,7 @@ class _OrdersScreenState extends State<OrdersScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_handleTabChange);
 
     Future.microtask(
@@ -42,16 +42,21 @@ class _OrdersScreenState extends State<OrdersScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        primary: true,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: const Color(0xff20402A),
+        title: const Padding(
+          padding: EdgeInsets.only(left: 20.0),
+          child: Text("My Orders",style: TextStyle(color: Colors.white),),
+        ),
+      ),
       backgroundColor: const Color(0xffEEEEE6),
       body: Column(
         children: [
-          SizedBox(height: 55.h),
-          AppBarClass(
-            text: "My Orders",
-            color: const Color(0xff20402A),
-            iconcolor: const Color(0xff1B4332),
-          ),
-          SizedBox(height: 30.h),
+          const SizedBox(height: 30,),
           Container(
             height: 40.h,
             margin: EdgeInsets.symmetric(horizontal: 20.w),
@@ -72,8 +77,9 @@ class _OrdersScreenState extends State<OrdersScreen>
               labelStyle:
                   TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
               tabs: const [
-                Tab(text: 'To Pick Up'),
-                Tab(text: 'Past Orders'),
+                Tab(text: 'Pending'),
+                Tab(text: 'Accepted'),
+                Tab(text: 'Rejected'),
               ],
             ),
           ),
@@ -89,20 +95,20 @@ class _OrdersScreenState extends State<OrdersScreen>
                   controller: _tabController,
                   children: [
                     provider.pendingOrders.isEmpty
-                        ? Center(
-                            child: Text("No pending orders",
-                                style: TextStyle(fontSize: 16.sp)))
+                        ? noOrder()
                         : buildOrdersList(provider.pendingOrders),
-                    provider.completedOrders.isEmpty
-                        ? Center(
-                            child: Text("No completed orders",
-                                style: TextStyle(fontSize: 16.sp)))
-                        : buildOrdersList(provider.completedOrders),
+                    provider.acceptedOrders.isEmpty
+                        ? noOrder()
+                        : buildOrdersList(provider.acceptedOrders),
+                    provider.rejectedOrders.isEmpty
+                        ? noOrder()
+                        : buildOrdersList(provider.rejectedOrders),
                   ],
                 );
               },
             ),
           ),
+          const SizedBox(height: 80,)
         ],
       ),
     );
@@ -143,7 +149,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                         style: TextStyle(
                             fontSize: 14.sp, fontWeight: FontWeight.w500)),
                     subtitle: Text("Qty: ${item['quantity']}"),
-                    trailing: Text("\$${item['itemPrice']}",
+                    trailing: Text("Rs ${item['itemPrice']}",
                         style: const TextStyle(fontWeight: FontWeight.bold)),
                     leading: item['imageUrl'] != null &&
                             item['imageUrl'].toString().isNotEmpty
@@ -177,7 +183,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("Total: \$${order['totalAmount']}",
+                    Text("Total: Rs ${order['totalAmount']}",
                         style: TextStyle(
                             fontSize: 14.sp, fontWeight: FontWeight.bold)),
                     Text(
@@ -199,7 +205,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                     onPressed: () {
                       final bakeryId = order['bakeryId'];
                       if (bakeryId != null) {
-                        showRatingDialog(bakeryId,context);
+                        showRatingDialog(bakeryId, context);
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text("Bakery ID not found!")),

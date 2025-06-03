@@ -1,11 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:completefoodorderingappui/services/stripe_service.dart';
 import 'package:completefoodorderingappui/view/bottombar/bottombar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:get/get.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -20,17 +19,11 @@ class _CartScreenState extends State<CartScreen> {
   String? bakeryName;
   String? location;
   bool _isLoading = false;
-
-  Future<void> initStripe() async {
-    Stripe.publishableKey =
-        'pk_live_51RBwfcBc9GZiVt1MckyJCoOXFNcVsoSPzMMGvpIqQ8LT7vAYgvTDsPpGYrnG7Fx8tA0Ejua8filc5Azed1mQdBcP00Y6hpx0sW';
-    await Stripe.instance.applySettings();
-  }
+  bool isDeleting = false;
 
   @override
   void initState() {
     super.initState();
-    initStripe();
   }
 
   Future<void> processPayment(double amount, String currency,
@@ -47,51 +40,66 @@ class _CartScreenState extends State<CartScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please login to continue')),
         );
-        setState(() {
-          _isLoading = false;
-        });
         return;
       }
 
-      final paymentIntentResult = await createPaymentIntent(
-        amount: (amount * 100).round().toString(),
-        currency: currency,
-        customerId: user.uid,
-        orderId: orderId,
-      );
-
-      if (paymentIntentResult == null) {
-        throw 'Failed to create payment intent';
+      // Group items by adminId
+      Map<String, List<Map<String, dynamic>>> itemsByAdmin = {};
+      for (var item in itemsData) {
+        String adminId = item['adminId'];
+        if (!itemsByAdmin.containsKey(adminId)) {
+          itemsByAdmin[adminId] = [];
+        }
+        itemsByAdmin[adminId]!.add(item);
       }
 
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
+      // Process payment for each admin's items
+      for (var entry in itemsByAdmin.entries) {
+        String adminId = entry.key;
+        List<Map<String, dynamic>> adminItems = entry.value;
+        
+        // Calculate total for this admin's items
+        double adminTotal = adminItems.fold(0, (sum, item) => sum + (item['totalPrice'] as num));
+
+        // Create payment intent for this admin
+        final paymentIntentResult = await StripeService.createPaymentIntent(
+          amount: (adminTotal * 100).round().toString(),
+          currency: currency,
+          customerId: user.uid,
+          orderId: orderId,
+          adminId: adminId,
+        );
+
+        if (paymentIntentResult == null) {
+          throw 'Failed to create payment intent for ${adminItems.first['bakeryName']}';
+        }
+
+        // Initialize payment sheet
+        await StripeService.initializePaymentSheet(
           paymentIntentClientSecret: paymentIntentResult['client_secret'],
-          merchantDisplayName: 'Your Bakery App',
-          appearance: const PaymentSheetAppearance(
-            colors: PaymentSheetAppearanceColors(
-              primary: Color(0xff20402A),
-            ),
-          ),
-        ),
-      );
+          adminId: adminId,
+        );
 
-      await Stripe.instance.presentPaymentSheet();
+        // Present payment sheet
+        await Stripe.instance.presentPaymentSheet();
 
-      await createOrder(
-        orderId: orderId,
-        customerId: user.uid,
-        items: itemsData,
-        totalAmount: amount,
-        paymentStatus: 'completed',
-        paymentIntentId: paymentIntentResult['id'],
-      );
+        // Create order for this admin
+        await createOrder(
+          orderId: '${orderId}_$adminId',
+          customerId: user.uid,
+          items: adminItems,
+          totalAmount: adminTotal,
+          paymentStatus: 'completed',
+          paymentIntentId: paymentIntentResult['id'],
+          adminId: adminId,
+        );
+      }
 
       await clearCart();
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Payment successful! Order placed.'),
+          content: Text('Payment successful! Orders placed.'),
           backgroundColor: Colors.green,
           padding: EdgeInsets.all(8),
         ),
@@ -119,43 +127,6 @@ class _CartScreenState extends State<CartScreen> {
     }
   }
 
-  Future<Map<String, dynamic>?> createPaymentIntent({
-    required String amount,
-    required String currency,
-    required String customerId,
-    required String orderId,
-  }) async {
-    try {
-      const secretKey =
-          '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';
-
-      final response = await http.post(
-        Uri.parse('https://api.stripe.com/v1/payment_intents'),
-        headers: {
-          'Authorization': 'Bearer $secretKey',
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: {
-          'amount': amount,
-          'currency': currency,
-          'metadata[customer_id]': customerId,
-          'metadata[order_id]': orderId,
-          'automatic_payment_methods[enabled]': 'true',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        return json.decode(response.body);
-      } else {
-        print('Error creating payment intent: ${response.body}');
-        return null;
-      }
-    } catch (e) {
-      print('Exception during payment intent creation: $e');
-      return null;
-    }
-  }
-
   Future<void> createOrder({
     required String orderId,
     required String customerId,
@@ -163,10 +134,9 @@ class _CartScreenState extends State<CartScreen> {
     required double totalAmount,
     required String paymentStatus,
     required String paymentIntentId,
+    required String adminId,
   }) async {
     try {
-      final String? adminId = items.isNotEmpty ? items.first['adminId'] : null;
-
       final orderData = {
         'orderId': orderId,
         'customerId': customerId,
@@ -174,7 +144,7 @@ class _CartScreenState extends State<CartScreen> {
         'totalAmount': totalAmount,
         'paymentStatus': paymentStatus,
         'paymentIntentId': paymentIntentId,
-        'bakeryName': bakeryName,
+        'bakeryName': items.first['bakeryName'],
         'orderDate': FieldValue.serverTimestamp(),
         'status': 'pending',
         'adminId': adminId,
@@ -202,23 +172,24 @@ class _CartScreenState extends State<CartScreen> {
               .update(itemRef, {'quantity': newStock >= 0 ? newStock : 0});
         });
       }
-      if (adminId != null) {
-        final adminRef =
-            FirebaseFirestore.instance.collection('admins').doc(adminId);
 
-        await FirebaseFirestore.instance.runTransaction((transaction) async {
-          final adminSnapshot = await transaction.get(adminRef);
-          if (!adminSnapshot.exists) return;
+      final adminRef =
+          FirebaseFirestore.instance.collection('admins').doc(adminId);
 
-          final currentOrders = adminSnapshot['totalOrders'] ?? 0;
-          final currentRevenue = adminSnapshot['revenue'] ?? 0.0;
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final adminSnapshot = await transaction.get(adminRef);
+        if (!adminSnapshot.exists) return;
 
-          transaction.update(adminRef, {
-            'totalOrders': (currentOrders as int) + 1,
-            'revenue': (currentRevenue as num) + totalAmount,
-          });
+        final data = adminSnapshot.data() ?? {};
+
+        final currentOrders = (data['totalOrders'] ?? 0) as int;
+        final currentRevenue = (data['revenue'] ?? 0.0) as num;
+
+        transaction.update(adminRef, {
+          'totalOrders': currentOrders + 1,
+          'revenue': currentRevenue + totalAmount,
         });
-      }
+      });
     } catch (e) {
       print('Error creating order: $e');
       rethrow;
@@ -259,6 +230,7 @@ class _CartScreenState extends State<CartScreen> {
             ? double.tryParse(doc['totalPrice']) ?? 0.0
             : doc['totalPrice'] ?? 0.0,
         'adminId': doc['adminId'] ?? 'unknown',
+        'bakeryName': doc['bakeryName'] ?? 'Unknown Bakery',
       };
     }).toList();
   }
@@ -372,212 +344,235 @@ class _CartScreenState extends State<CartScreen> {
           );
         },
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('cart').snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: isDeleting
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: Colors.black,
+              ),
+            )
+          : StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('cart').snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          final cartDocs = snapshot.data!.docs;
+                final cartDocs = snapshot.data!.docs;
 
-          if (cartDocs.isEmpty) {
-            return const Center(child: Text('Your cart is empty.'));
-          }
+                if (cartDocs.isEmpty) {
+                  return const Center(child: Text('Your cart is empty.'));
+                }
 
-          // Store bakeryName and location from first item
-          if (bakeryName == null || location == null) {
-            final firstDoc = cartDocs.first;
-            bakeryName = firstDoc['bakeryName'] ?? 'N/A';
-            // location = firstDoc['location'] ?? 'N/A';
-          }
+                // Store bakeryName and location from first item
+                if (bakeryName == null || location == null) {
+                  final firstDoc = cartDocs.first;
+                  bakeryName = firstDoc['bakeryName'] ?? 'N/A';
+                  // location = firstDoc['location'] ?? 'N/A';
+                }
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              children: [
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    const Icon(Icons.store),
-                    const SizedBox(width: 5),
-                    Text(bakeryName ?? 'Bakery Name'),
-                  ],
-                ),
-                // const SizedBox(height: 15),
-                // Row(
-                //   children: [
-                //     const Icon(Icons.location_on_outlined),
-                //     const SizedBox(width: 5),
-                //     Text(location ?? 'Location'),
-                //   ],
-                // ),
-                const SizedBox(height: 20),
-                ...cartDocs.map((doc) {
-                  final itemName = doc['itemName'] ?? 'Unknown';
-                  final itemQuantity = doc['quantity'];
-                  final docId = doc.id;
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          const Icon(Icons.store),
+                          const SizedBox(width: 5),
+                          Text(bakeryName ?? 'Bakery Name'),
+                        ],
+                      ),
+                      // const SizedBox(height: 15),
+                      // Row(
+                      //   children: [
+                      //     const Icon(Icons.location_on_outlined),
+                      //     const SizedBox(width: 5),
+                      //     Text(location ?? 'Location'),
+                      //   ],
+                      // ),
+                      const SizedBox(height: 20),
+                      ...cartDocs.map((doc) {
+                        final itemName = doc['itemName'] ?? 'Unknown';
+                        final itemQuantity = doc['quantity'];
+                        final docId = doc.id;
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12.0),
-                    child: IntrinsicHeight(
-                      child: Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: Colors.grey.withOpacity(0.3),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              flex: 1,
-                              child: Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: SizedBox(
-                                    height: 60.h,
-                                    child: Image.asset(
-                                      'images/item.png',
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                ),
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12.0),
+                          child: IntrinsicHeight(
+                            child: Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.grey.withOpacity(0.3),
                               ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 15),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        const SizedBox(height: 10),
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                              right: 20.0),
-                                          child: Text(
-                                            itemName,
-                                            style: TextStyle(
-                                              fontSize: 14.sp,
-                                              fontWeight: FontWeight.w600,
-                                              color: const Color(0xff20402A),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                              right: 20.0),
-                                          child: Text(
-                                            'quantity: x$itemQuantity',
-                                            style: TextStyle(
-                                              fontSize: 11.sp,
-                                              fontWeight: FontWeight.w400,
-                                              color: const Color(0xff454745),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                      ],
-                                    ),
-                                    Padding(
-                                      padding:
-                                          const EdgeInsets.only(right: 20.0),
-                                      child: GestureDetector(
-                                        onTap: () async {
-                                          final quantityToAdd = doc['quantity'];
-                                          final itemId = doc['itemId'];
-
-                                          try {
-                                            final itemDocRef = FirebaseFirestore
-                                                .instance
-                                                .collection('items')
-                                                .doc(itemId);
-
-                                            // Run transaction to safely update item quantity
-                                            await FirebaseFirestore.instance
-                                                .runTransaction(
-                                                    (transaction) async {
-                                              final snapshot = await transaction
-                                                  .get(itemDocRef);
-
-                                              if (!snapshot.exists) return;
-
-                                              final currentStock =
-                                                  snapshot['quantity'] ?? 0;
-
-                                              transaction.update(itemDocRef, {
-                                                'quantity': currentStock +
-                                                    quantityToAdd,
-                                              });
-
-                                              // Now delete the cart item
-                                              transaction.delete(
-                                                FirebaseFirestore.instance
-                                                    .collection('cart')
-                                                    .doc(docId),
-                                              );
-                                            });
-
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                    'Item removed from cart and stock updated.'),
-                                                duration: Duration(seconds: 2),
-                                              ),
-                                            );
-                                          } catch (e) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                    'Error removing item: ${e.toString()}'),
-                                                duration:
-                                                    const Duration(seconds: 3),
-                                              ),
-                                            );
-                                          }
-                                        },
-                                        child: Container(
-                                          height: 25.h,
-                                          width: 25.h,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: Colors.red.withOpacity(0.3),
-                                          ),
-                                          child: const Icon(
-                                            Icons.close,
-                                            color: Colors.red,
-                                            size: 20,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    flex: 1,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: SizedBox(
+                                          height: 60.h,
+                                          child: Image.asset(
+                                            'images/item.png',
+                                            fit: BoxFit.cover,
                                           ),
                                         ),
                                       ),
-                                    )
-                                  ],
-                                ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 15),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              const SizedBox(height: 10),
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    right: 20.0),
+                                                child: Text(
+                                                  itemName,
+                                                  style: TextStyle(
+                                                    fontSize: 14.sp,
+                                                    fontWeight: FontWeight.w600,
+                                                    color:
+                                                        const Color(0xff20402A),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    right: 20.0),
+                                                child: Text(
+                                                  'quantity: x$itemQuantity',
+                                                  style: TextStyle(
+                                                    fontSize: 11.sp,
+                                                    fontWeight: FontWeight.w400,
+                                                    color:
+                                                        const Color(0xff454745),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                            ],
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                                right: 20.0),
+                                            child: GestureDetector(
+                                              onTap: () async {
+                                                final quantityToAdd =
+                                                    doc['quantity'];
+                                                final itemId = doc['itemId'];
+
+                                                try {
+                                                  setState(() {
+                                                    isDeleting = true;
+                                                  });
+                                                  final itemDocRef =
+                                                      FirebaseFirestore.instance
+                                                          .collection('items')
+                                                          .doc(itemId);
+
+                                                  // Run transaction to safely update item quantity
+                                                  await FirebaseFirestore
+                                                      .instance
+                                                      .runTransaction(
+                                                          (transaction) async {
+                                                    final snapshot =
+                                                        await transaction
+                                                            .get(itemDocRef);
+
+                                                    if (!snapshot.exists)
+                                                      return;
+
+                                                    final currentStock =
+                                                        snapshot['quantity'] ??
+                                                            0;
+
+                                                    transaction
+                                                        .update(itemDocRef, {
+                                                      'quantity': currentStock +
+                                                          quantityToAdd,
+                                                    });
+
+                                                    // Now delete the cart item
+                                                    transaction.delete(
+                                                      FirebaseFirestore.instance
+                                                          .collection('cart')
+                                                          .doc(docId),
+                                                    );
+                                                  });
+
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                          'Item removed from cart and stock updated.'),
+                                                      duration:
+                                                          Duration(seconds: 2),
+                                                    ),
+                                                  );
+                                                } catch (e) {
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                          'Error removing item: ${e.toString()}'),
+                                                      duration: const Duration(
+                                                          seconds: 3),
+                                                    ),
+                                                  );
+                                                } finally {
+                                                  setState(() {
+                                                    isDeleting = false;
+                                                  });
+                                                }
+                                              },
+                                              child: Container(
+                                                height: 30.h,
+                                                width: 30.h,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: Colors.red
+                                                      .withOpacity(0.3),
+                                                ),
+                                                child: const Icon(
+                                                  Icons.close,
+                                                  color: Colors.red,
+                                                  size: 25,
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ],
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 }

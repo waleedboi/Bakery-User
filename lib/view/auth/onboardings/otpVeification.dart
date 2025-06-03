@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:completefoodorderingappui/view/auth/onboardings/controllers/controller-otpver.dart';
 import 'package:completefoodorderingappui/view/widget/buttons.dart';
 import 'package:completefoodorderingappui/view/auth/onboardings/newpassword.dart';
@@ -29,7 +30,8 @@ class OTPVerificationWidget extends StatefulWidget {
 class _OTPVerificationWidgetState extends State<OTPVerificationWidget> {
   StreamController<ErrorAnimationType> errorController =
       StreamController<ErrorAnimationType>();
-
+  bool _isResending = false;
+  bool _isVerifying = false;
   GlobalKey<FormState> formkey = GlobalKey<FormState>();
   @override
   void initState() {
@@ -37,10 +39,45 @@ class _OTPVerificationWidgetState extends State<OTPVerificationWidget> {
     super.initState();
   }
 
+  Future<void> _resendOtp() async {
+    setState(() => _isResending = true);
+
+    try {
+      // 1️⃣ Fetch the user’s email from Firestore
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.id)
+          .get();
+      final email = doc.data()?['email'] as String?;
+
+      if (email == null) throw Exception("No email found for user.");
+
+      bool otpSent = await EmailOTP.sendOTP(email: email);
+      if (!otpSent) {
+        throw Exception("Failed to send OTP. Check your SMTP settings.");
+      }
+
+      Get.snackbar("OTP Sent", "A new OTP has been sent to $email",
+          snackPosition: SnackPosition.BOTTOM);
+    } catch (e) {
+      Get.snackbar("Error", e.toString(),
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white);
+    } finally {
+      setState(() => _isResending = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
         resizeToAvoidBottomInset: false,
+        appBar: AppBar(
+          title: const Text("OTP Verification"),
+          backgroundColor: const Color(0xffEEEEE6),
+          centerTitle: true,
+        ),
         body: GetBuilder<OtpVerController>(builder: (obj) {
           return Container(
             height: ScreenUtil().screenHeight,
@@ -53,14 +90,14 @@ class _OTPVerificationWidgetState extends State<OTPVerificationWidget> {
                   SizedBox(
                     height: 55.h,
                   ),
-                  AppBarClass(
-                    text: 'OTP Verification',
-                    color: const Color(0xff20402A),
-                    iconcolor: const Color(0xff1B4332),
-                  ),
-                  SizedBox(
-                    height: 45.h,
-                  ),
+                  // AppBarClass(
+                  //   text: 'OTP Verification',
+                  //   color: const Color(0xff20402A),
+                  //   iconcolor: const Color(0xff1B4332),
+                  // ),
+                  // SizedBox(
+                  //   height: 45.h,
+                  // ),
                   const Image(
                       image: AssetImage("images/shield-lock (1) 1.png")),
                   SizedBox(
@@ -149,7 +186,7 @@ class _OTPVerificationWidgetState extends State<OTPVerificationWidget> {
                     height: 17.h,
                   ),
                   Text(
-                    "Didn’t Received the OTP. \n Click here to resend",
+                    "Didn’t Received the OTP?",
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 16.sp,
@@ -157,6 +194,23 @@ class _OTPVerificationWidgetState extends State<OTPVerificationWidget> {
                       color: Colors.black,
                     ),
                   ),
+                  _isResending
+                      ? const CircularProgressIndicator(
+                          color: Colors.black,
+                        )
+                      : GestureDetector(
+                          onTap: () => _resendOtp(),
+                          child: Text(
+                            "Click here to resend",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w400,
+                              color: Colors.blue,
+                            ),
+                          ),
+                        ),
+
                   SizedBox(
                     height: 21.h,
                   ),
@@ -164,33 +218,44 @@ class _OTPVerificationWidgetState extends State<OTPVerificationWidget> {
                       borderRadius: 7.78.r,
                       width: 119.w,
                       height: 36.27.h,
-                      onPressed: () async {
-                        if (formkey.currentState!.validate() &&
-                            obj.otpController.text.length == 4) {
-                          bool isValidOtp = await EmailOTP.verifyOTP(
-                              otp: obj.otpController.text);
+                      onPressed: _isVerifying
+                          ? null
+                          : () async {
+                              if (_isVerifying) return;
 
-                          if (isValidOtp) {
-                            if (widget.isresetpassword == true) {
-                              Get.to(() => NewPasswordScreen(id: widget.id));
-                            } else {
-                              Get.to(() => const OtpSuccessScreen());
-                            }
-                          } else {
-                            log('Invalid OTP: ${obj.otpController.text}');
-                            errorController.add(ErrorAnimationType.shake);
-                            Get.snackbar("Error", "Invalid OTP entered",
-                                snackPosition: SnackPosition.BOTTOM,
-                                backgroundColor: Colors.red,
-                                colorText: Colors.white);
-                          }
-                        } else {
-                          errorController.add(ErrorAnimationType.shake);
-                        }
-                      },
-                      backcolor: obj.otpController.text.length == 4
-                          ? ButtonsColors.secondaryColor
-                          : Colors.grey,
+                              if (formkey.currentState!.validate() &&
+                                  obj.otpController.text.length == 4) {
+                                setState(() => _isVerifying = true);
+
+                                bool isValidOtp = await EmailOTP.verifyOTP(
+                                    otp: obj.otpController.text);
+
+                                if (isValidOtp) {
+                                  await FirebaseFirestore.instance
+                                      .collection('users')
+                                      .doc(widget.id)
+                                      .update({'otpVerified': true});
+                                  setState(() => _isVerifying = false);
+                                  if (widget.isresetpassword == true) {
+                                    Get.to(
+                                        () => NewPasswordScreen(id: widget.id));
+                                  } else {
+                                    Get.to(() => const OtpSuccessScreen());
+                                  }
+                                } else {
+                                  log('Invalid OTP: ${obj.otpController.text}');
+                                  errorController.add(ErrorAnimationType.shake);
+                                  setState(() => _isVerifying = false);
+                                  Get.snackbar("Error", "Invalid OTP entered",
+                                      snackPosition: SnackPosition.BOTTOM,
+                                      backgroundColor: Colors.red,
+                                      colorText: Colors.white);
+                                }
+                              } else {
+                                errorController.add(ErrorAnimationType.shake);
+                              }
+                            },
+                      backcolor: const Color.fromARGB(255, 46, 125, 50),
                       child: ButtonText(
                         color: const Color(0xffFBFBF0),
                         text: 'Verify',

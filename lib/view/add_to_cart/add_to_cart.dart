@@ -183,6 +183,14 @@ class _AddToCartState extends State<AddToCart> {
 
   @override
   Widget build(BuildContext context) {
+    String badgeText;
+    if (widget.quantity == 0) {
+      badgeText = 'Sold Out';
+    } else if (widget.quantity < 5) {
+      badgeText = 'Only ${widget.quantity} left';
+    } else {
+      badgeText = '${widget.quantity} available';
+    }
     return Scaffold(
       backgroundColor: const Color(0xffEEEEE6),
       body: SingleChildScrollView(
@@ -257,7 +265,7 @@ class _AddToCartState extends State<AddToCart> {
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 15.0),
                               child: Row(
-                                children: [Text("${widget.quantity} Left")],
+                                children: [Text(badgeText)],
                               ),
                             ),
                           ),

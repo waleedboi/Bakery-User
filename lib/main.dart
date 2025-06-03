@@ -1,3 +1,5 @@
+import 'package:completefoodorderingappui/bakeryadminapp/HomeScreens/provider/user_provider.dart';
+import 'package:completefoodorderingappui/services/notification_listener.dart';
 import 'package:completefoodorderingappui/view/add_to_cart/provider/cart_provider.dart';
 import 'package:completefoodorderingappui/view/orders_screen/provider/order_provider.dart';
 import 'package:completefoodorderingappui/view/splash/spashscreen.dart';
@@ -9,6 +11,7 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   EmailOTP.config(
     appName: 'FoodOrdering',
     otpType: OTPType.numeric,
@@ -17,8 +20,7 @@ void main() async {
     appEmail: 'me@rohitchouhan.com',
     otpLength: 4,
   ); 
-  WidgetsFlutterBinding.ensureInitialized();
-  Firebase.initializeApp(
+  await Firebase.initializeApp(
     // options: const FirebaseOptions(
     //     apiKey: "AIzaSyBma-vJige4ozn2JEw_Wz2Kpcwkzvd1rgE",
     //     authDomain: "groceryapp-a124b.firebaseapp.com",
@@ -33,6 +35,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => OrderProvider()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
       ],
       child: const MyApp(),
     ),
@@ -49,15 +52,17 @@ class MyApp extends StatelessWidget {
       minTextAdapt: true,
       splitScreenMode: true,
       builder: (_, child) {
-        return GetMaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'Flutter Demo',
-          theme: ThemeData(
-            scaffoldBackgroundColor: Colors.white,
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-            useMaterial3: true,
+        return NotificationsHandler(
+          child: GetMaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'Flutter Demo',
+            theme: ThemeData(
+              scaffoldBackgroundColor: Colors.white,
+              colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+              useMaterial3: true,
+            ),
+            home: const SpashScreen(),
           ),
-          home: const SpashScreen(),
         );
       },
     );

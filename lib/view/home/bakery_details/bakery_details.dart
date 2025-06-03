@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
 
 class RestaurantMenuScreen extends StatefulWidget {
@@ -19,36 +20,35 @@ class RestaurantMenuScreen extends StatefulWidget {
 class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   Stream<List<Map<String, dynamic>>> getMenuItems() {
-  if (widget.model.items.isEmpty) {
-    return Stream.value([]);
+    if (widget.model.items.isEmpty) {
+      return Stream.value([]);
+    }
+
+    return FirebaseFirestore.instance
+        .collection('items')
+        .where(FieldPath.documentId, whereIn: widget.model.items)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .where((doc) => doc.data()['visibility'] == true)
+          .map((doc) {
+        final data = doc.data();
+        dynamic itemPrice = data['itemPrice'];
+        dynamic quantity = data['quantity'];
+
+        return {
+          'uid': doc.id,
+          'itemName': data['itemName'] ?? 'Unknown Item',
+          'itemDescription':
+              data['itemDescription'] ?? 'No description available',
+          'itemPrice': itemPrice,
+          'imageUrl': data['imageUrl'] ?? '',
+          'quantity': quantity,
+          'adminId': data['adminId']
+        };
+      }).toList();
+    });
   }
-
-  return FirebaseFirestore.instance
-      .collection('items')
-      .where(FieldPath.documentId, whereIn: widget.model.items)
-      .snapshots()
-      .map((snapshot) {
-    return snapshot.docs
-        .where((doc) => doc.data()['visibility'] == true) 
-        .map((doc) {
-          final data = doc.data();
-          dynamic itemPrice = data['itemPrice'];
-          dynamic quantity = data['quantity'];
-
-          return {
-            'uid': doc.id,
-            'itemName': data['itemName'] ?? 'Unknown Item',
-            'itemDescription': data['itemDescription'] ?? 'No description available',
-            'itemPrice': itemPrice,
-            'imageUrl': data['imageUrl'] ?? '',
-            'quantity': quantity,
-            'adminId':data['adminId']
-          };
-        })
-        .toList();
-  });
-}
-
 
   Stream<bool> checkUserCartItems() {
     final User? currentUser = _auth.currentUser;
@@ -85,7 +85,8 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
               padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 10.h),
               child: GestureDetector(
                 onTap: () {
-                  Get.to(const CartScreen(),transition: Transition.rightToLeft);
+                  Get.to(const CartScreen(),
+                      transition: Transition.rightToLeft);
                 },
                 child: Container(
                   height: 50.h,
@@ -179,21 +180,6 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
                               ),
                             ),
                           ),
-                          const Spacer(),
-                          Container(
-                              height: 27.h,
-                              width: 27.w,
-                              margin: EdgeInsets.only(right: 12.w),
-                              decoration: BoxDecoration(
-                                color: const Color(0xff383736).withOpacity(0.8),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Center(
-                                  child: Icon(
-                                Icons.favorite_border,
-                                color: Colors.white,
-                                size: 20,
-                              ))),
                         ],
                       ),
                     )),
@@ -360,128 +346,170 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
   }
 
   Widget _buildItemWidget(Map<String, dynamic> item) {
-    return GestureDetector(
-      onTap: () {
-        Get.to(
-          () => AddToCart(
-            itemId: item['uid'],
-            itemName: item['itemName'],
-            itemDescription: item['itemDescription'],
-            bakeryName: widget.model.bakeryName,
-            pickupTime: widget.model.bakeryTiming,
-            itemPrice: item['itemPrice'],
-            quantity: item['quantity'] ?? 0,
-            imageUrl: item['imageUrl'] ?? '',
-            adminId:item['adminId']??''
-          ),
-          transition: Transition.rightToLeft,
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-        child: IntrinsicHeight(
-          child: Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.grey.withOpacity(0.3),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 15),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const SizedBox(height: 10),
-                        Text(
-                          item['itemName'],
-                          style: TextStyle(
-                            fontSize: 14.sp,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xff20402A),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item['itemDescription'],
-                          softWrap: true,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 3,
-                          style: TextStyle(
-                            fontSize: 11.sp,
-                            fontWeight: FontWeight.w400,
-                            color: const Color(0xff454745),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
+    final int qty = (item['quantity'] ?? 0) as int;
+    String badgeText;
+    if (qty == 0) {
+      badgeText = 'Sold Out';
+    } else if (qty < 5) {
+      badgeText = 'Only $qty left';
+    } else {
+      badgeText = '$qty available';
+    }
+    final bool isSoldOut = qty == 0;
+    return AbsorbPointer(
+      absorbing: isSoldOut,  
+      child: Opacity(
+        opacity: isSoldOut ? 0.5 : 1.0,
+        child: GestureDetector(
+          onTap: () {
+            Get.to(
+              () => AddToCart(
+                  itemId: item['uid'],
+                  itemName: item['itemName'],
+                  itemDescription: item['itemDescription'],
+                  bakeryName: widget.model.bakeryName,
+                  pickupTime: widget.model.bakeryTiming,
+                  itemPrice: item['itemPrice'],
+                  quantity: item['quantity'],
+                  imageUrl: item['imageUrl'] ?? '',
+                  adminId: item['adminId'] ?? ''),
+              transition: Transition.rightToLeft,
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+            child: IntrinsicHeight(
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    // color: Colors.grey.withOpacity(0.3),
+                    color: Colors.white),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 15),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
+                            const SizedBox(height: 10),
                             Text(
-                              "Rs. ${item['itemPrice']}",
+                              item['itemName'],
                               style: TextStyle(
-                                fontSize: 13.sp,
+                                fontSize: 14.sp,
                                 fontWeight: FontWeight.w600,
                                 color: const Color(0xff20402A),
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xff20402A).withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                "${item['quantity'] ?? 0} available",
-                                style: TextStyle(
-                                  fontSize: 10.sp,
-                                  color: const Color(0xff20402A),
-                                ),
+                            const SizedBox(height: 4),
+                            Text(
+                              item['itemDescription'],
+                              softWrap: true,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 3,
+                              style: TextStyle(
+                                fontSize: 11.sp,
+                                fontWeight: FontWeight.w400,
+                                color: const Color(0xff454745),
                               ),
                             ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(
+                                  "Rs. ${item['itemPrice']}",
+                                  style: TextStyle(
+                                    fontSize: 13.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xff20402A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topRight: Radius.circular(12),
-                      bottomRight: Radius.circular(12),
-                    ),
-                    child: SizedBox(
-                      height: 100,
-                      child: item['imageUrl'] != null &&
-                              item['imageUrl'].toString().isNotEmpty
-                          ? Image.network(
-                              item['imageUrl'],
-                              fit: BoxFit.cover,
-                              alignment: Alignment.center,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Image.asset(
-                                  'images/item.png',
-                                  fit: BoxFit.cover,
-                                );
-                              },
-                            )
-                          : Image.asset(
-                              'images/item.png',
-                              fit: BoxFit.cover,
+                    Expanded(
+                      flex: 1,
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.only(top: 8.0, bottom: 8, right: 10),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: SizedBox(
+                            height: 100,
+                            child: Stack(
+                              children: [
+                                // 1️⃣ The background image
+                                Positioned.fill(
+                                  child: item['imageUrl'] != null &&
+                                          item['imageUrl'].toString().isNotEmpty
+                                      ? Image.network(
+                                          item['imageUrl'],
+                                          fit: BoxFit.cover,
+                                        )
+                                      : Image.asset(
+                                          'images/item.png',
+                                          fit: BoxFit.cover,
+                                        ),
+                                ),
+                                Positioned(
+                                  top: 5,
+                                  left: -2,
+                                  height: 25,
+                                  child: ClipRRect(
+                                    borderRadius: const BorderRadiusGeometry.only(
+                                      topRight: Radius.circular(8),
+                                      bottomRight: Radius.circular(8),
+                                    ),
+                                    child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          border: Border.all(
+                                              color: Colors.grey, width: 0.6),
+                                          borderRadius: const BorderRadius.only(
+                                            topRight: Radius.circular(8),
+                                            bottomRight: Radius.circular(8),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const SizedBox(
+                                              width: 5,
+                                            ),
+                                            SvgPicture.asset('images/bag.svg'),
+                                            const SizedBox(
+                                              width: 5,
+                                            ),
+                                            Text(
+                                              badgeText,
+                                              style: TextStyle(
+                                                fontSize: 10.sp,
+                                                color: const Color(0xff20402A),
+                                              ),
+                                            ),
+                                            const SizedBox(
+                                              width: 5,
+                                            ),
+                                          ],
+                                        )),
+                                  ),
+                                ),
+                              ],
                             ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

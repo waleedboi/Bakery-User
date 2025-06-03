@@ -1,0 +1,2 @@
+Z:/Flutter Projects/Yashfa/food app/completefoodorderingappui/android/app/.cxx/RelWithDebInfo/6c3a4r2n/x86/CMakeFiles/edit_cache.dir
+Z:/Flutter Projects/Yashfa/food app/completefoodorderingappui/android/app/.cxx/RelWithDebInfo/6c3a4r2n/x86/CMakeFiles/rebuild_cache.dir

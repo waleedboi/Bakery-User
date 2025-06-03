@@ -1,12 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:completefoodorderingappui/view/auth/onboardings/signin.dart';
+import 'package:completefoodorderingappui/view/boarding/on_boarding.dart';
 import 'package:completefoodorderingappui/view/home/myprofile/customerservice.dart';
 import 'package:completefoodorderingappui/view/home/myprofile/myinfo.dart';
 import 'package:completefoodorderingappui/view/change_password/change_password.dart';
 import 'package:completefoodorderingappui/view/home/settingsscreens/setting.dart';
-import 'package:completefoodorderingappui/view/splash/controller.dart';
 import 'package:completefoodorderingappui/view/widget/clipper.dart';
-import 'package:completefoodorderingappui/utilis/utilis.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -23,19 +22,13 @@ class MyProfileScreen extends StatefulWidget {
 class _MyProfileScreenState extends State<MyProfileScreen> {
   String username = "";
   bool isLoading = true;
+  String? userImageUrl;
 
   List<String> tabs = [
     "My Info",
     "Change Password",
     "Customer service",
     "Settings"
-  ];
-
-  List<IconData> tabIcons = [
-    Icons.person_outline,
-    Icons.lock_outlined,
-    Icons.support_agent,
-    Icons.settings,
   ];
 
   @override
@@ -59,6 +52,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
         setState(() {
           username = userData['name'] ?? "User";
+          userImageUrl = userData['imageurl'];
         });
       }
     } catch (e) {
@@ -72,7 +66,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
   void _showLogoutConfirmationDialog(BuildContext context) {
     final navigator = Navigator.of(context);
-  final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -132,25 +126,24 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 );
 
                 try {
-                  // final user = FirebaseAuth.instance.currentUser;
+                  final user = FirebaseAuth.instance.currentUser;
 
-                  // if (user != null) {
-                  //   final token = await FirebaseMessaging.instance.getToken();
+                  if (user != null) {
+                    final token = await FirebaseMessaging.instance.getToken();
 
-                  //   if (token != null) {
-                  //     await FirebaseFirestore.instance
-                  //         .collection('users')
-                  //         .doc(user.uid)
-                  //         .update({
-                  //       'tokens': FieldValue.arrayRemove([token]),
-                  //     });
-                  //   }
-
-                  // }
-                    await FirebaseAuth.instance.signOut();
+                    if (token != null) {
+                      await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(user.uid)
+                          .update({
+                        'tokens': FieldValue.arrayRemove([token]),
+                      });
+                    }
+                  }
+                  await FirebaseAuth.instance.signOut();
                   navigator.pop();
 
-                  Get.offAll(() => const SignInScreen());
+                  Get.offAll(() => const OnboardingScreen(initialPage: 2));
                 } catch (e) {
                   navigator.pop();
 
@@ -177,73 +170,88 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   }
 
   Widget _buildProfileImage() {
-    final userImage = SplashScreenController.obj.userModel?.imageurl;
+    if (userImageUrl != null && userImageUrl!.isNotEmpty) {
+      return Container(
+        width: 82.h,
+        height: 82.h,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: const Color.fromARGB(255, 212, 186, 168).withOpacity(0.3),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Container(
+            width: 75.h,
+            height: 75.h,
+            decoration: const BoxDecoration(shape: BoxShape.circle),
+            child: ClipOval(
+              child: Image.network(
+                userImageUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildInitialsContainer();
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      color: const Color(0xff1B4332),
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+    } else {
+      return _buildInitialsContainer();
+    }
+  }
+
+  Widget _buildInitialsContainer() {
+    String initial = username.isNotEmpty ? username[0].toUpperCase() : "U";
 
     return Container(
-      width: 100.h,
-      height: 100.h,
-      decoration: const BoxDecoration(shape: BoxShape.circle),
-      child: userImage != null && userImage.isNotEmpty
-          ? Image.network(
-              userImage,
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Center(
-                  child: CircularProgressIndicator(
-                    color: const Color(0xff1B4332),
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                        : null,
-                  ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  width: 100.w,
-                  height: 100.h,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.grey[300],
-                  ),
-                  child: Icon(
-                    Icons.person,
-                    size: 60.sp,
-                    color: const Color(0xff1B4332),
-                  ),
-                );
-              },
-            )
-          : Container(
-              width: 100.w,
-              height: 100.h,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.grey[300],
-              ),
-              child: Icon(
-                Icons.person,
-                size: 35.sp,
+      width: 82.h,
+      height: 82.h,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color.fromARGB(255, 212, 186, 168).withOpacity(0.3),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Container(
+          width: 75.h,
+          height: 75.h,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.grey[300],
+          ),
+          child: Center(
+            child: Text(
+              initial,
+              style: TextStyle(
+                fontSize: 30.sp,
+                fontWeight: FontWeight.bold,
                 color: const Color(0xff1B4332),
               ),
             ),
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildMenuItem(int index) {
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 20.w, vertical: 8.h),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xffFAFAFA),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -264,24 +272,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
             }
           },
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+            padding: EdgeInsets.symmetric(vertical: 12.h),
             child: Row(
               children: [
-                Container(
-                  height: 40.h,
-                  width: 40.w,
-                  decoration: BoxDecoration(
-                    color: const Color(0xffF5DDCC).withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      tabIcons[index],
-                      color: const Color(0xff1B4332),
-                      size: 20.sp,
-                    ),
-                  ),
-                ),
                 SizedBox(width: 16.w),
                 Expanded(
                   child: Text(
@@ -293,10 +286,13 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                     ),
                   ),
                 ),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16.sp,
-                  color: const Color(0xff1B4332),
+                Padding(
+                  padding: const EdgeInsets.only(right: 20.0),
+                  child: Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16.sp,
+                    color: const Color(0xff1B4332),
+                  ),
                 ),
               ],
             ),
@@ -315,21 +311,22 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
           ClipPath(
             clipper: TopClipper(),
             child: Container(
-              height: 220.h,
+              height: 180.h,
               width: ScreenUtil().screenWidth,
               color: const Color(0xffF5DDCC),
             ),
           ),
           Positioned(
             top: 55.h,
-            left: 0,
+            left: 20,
             right: 0,
-            child: AppBarClass(
-              text: "My Profile",
-              color: const Color(0xff20402A),
-              iconcolor: const Color(0xff1B4332),
+            child: const Text(
+              "My Profile",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.left,
             ),
           ),
+          Positioned(top: 100, right: 20, child: _buildProfileImage()),
           SafeArea(
             child: isLoading
                 ? const Center(
@@ -341,35 +338,58 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                     child: Column(
                       children: [
                         SizedBox(height: 90.h),
-                        Center(child: _buildProfileImage()),
                         SizedBox(height: 16.h),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              "Hello ",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 18.sp,
-                                color: const Color(0xff20402A),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Hello",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 18.sp,
+                                      color: const Color(0xff20402A),
+                                    ),
+                                  ),
+                                  SizedBox(width: 4.w),
+                                  Image(
+                                    image: const AssetImage("images/hello.png"),
+                                    height: 18.sp,
+                                  ),
+                                ],
                               ),
-                            ),
-                            Text(
-                              username,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18.sp,
-                                color: const Color(0xff1B4332),
+                              const SizedBox(height: 4),
+                              Text(
+                                username,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 30.sp,
+                                  color: const Color(0xff1B4332),
+                                ),
                               ),
-                            ),
-                            SizedBox(width: 4.w),
-                            Image(
-                              image: const AssetImage("images/hello.png"),
-                              height: 18.sp,
-                            )
-                          ],
+                            ],
+                          ),
                         ),
-                        SizedBox(height: 24.h),
+                        SizedBox(height: 10.h),
+                        const Align(
+                          alignment: Alignment.bottomLeft,
+                          child: Padding(
+                            padding: EdgeInsets.only(left: 20.0),
+                            child: Text(
+                              "--------------------------",
+                              style: TextStyle(
+                                color: Color(0xffDE5B33),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 20,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 10.h),
                         ...List.generate(
                           tabs.length,
                           (index) => _buildMenuItem(index),

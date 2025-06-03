@@ -7,15 +7,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class BottomBarScreen extends StatefulWidget {
-  const BottomBarScreen({super.key});
+  final int initialIndex;
+  const BottomBarScreen({super.key, this.initialIndex = 0});
 
   @override
   State<BottomBarScreen> createState() => _BottomBarScreenState();
 }
 
 class _BottomBarScreenState extends State<BottomBarScreen> {
-  PageController pagecontroller = PageController();
-  int index = 0;
+  // PageController pagecontroller = PageController();
+  // int index = 0;
+  late PageController pagecontroller;
+  late int index;
+
+  @override
+  void initState() {
+    super.initState();
+    index = widget.initialIndex;
+    pagecontroller = PageController(initialPage: index);
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -29,7 +39,7 @@ class _BottomBarScreenState extends State<BottomBarScreen> {
               height: ScreenUtil().screenHeight,
               width: ScreenUtil().screenWidth,
               child: PageView(
-                // physics: NeverScrollableScrollPhysics(),
+                physics: const NeverScrollableScrollPhysics(),
                 onPageChanged: (value) {
                   log("message $value");
                   index = value;
@@ -50,12 +60,8 @@ class _BottomBarScreenState extends State<BottomBarScreen> {
                 height: 70.82.h,
                 width: 371.27.w,
                 decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border.fromBorderSide(BorderSide(
-                      color: Color.fromARGB(255, 182, 182, 182),
-                    )
-                        //color: Colors.grey,
-                        )),
+                  color: Colors.white,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -65,42 +71,62 @@ class _BottomBarScreenState extends State<BottomBarScreen> {
                         pagecontroller.jumpToPage(0);
                         setState(() {});
                       },
-                      child: Image(
-                        image: index != 0
-                            ? const AssetImage("images/bottomnav.png")
-                            : const AssetImage("images/homefilled.png"),
-                        height: 17.25,
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 60.w,
+                        height: 60.h,
+                        child: Center(
+                          child: Image(
+                            image: index != 0
+                                ? const AssetImage("images/bottomnav.png")
+                                : const AssetImage("images/homefilled.png"),
+                            height: 16.h,
+                          ),
+                        ),
                       ),
                     ),
                     InkWell(
                       onTap: () {
                         index = 1;
                         pagecontroller.jumpToPage(1);
-
                         setState(() {});
                       },
-                      child: Image(
-                        image: index != 1
-                            ? const AssetImage("images/bottomheart.png")
-                            : const AssetImage("images/favfilled.png"),
-                        height: 17.02,
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 60.w,
+                        height: 60.h,
+                        child: Center(
+                          child: Image(
+                            image: index != 1
+                                ? const AssetImage("images/bottomheart.png")
+                                : const AssetImage("images/favfilled.png"),
+                            height: 16.h,
+                          ),
+                        ),
                       ),
                     ),
                     InkWell(
                       onTap: () {
                         index = 2;
-                        // pagecontroller.jumpTo(
-                        //   2,
-                        // );
-                        pagecontroller.animateToPage(2,
-                            duration: const Duration(seconds: 1), curve: Curves.ease);
+                        pagecontroller.animateToPage(
+                          2,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.ease,
+                        );
                         setState(() {});
                       },
-                      child: Image(
-                        image: index != 2
-                            ? const AssetImage("images/bottomkitchen.png")
-                            : const AssetImage("images/Ordersfilled.png"),
-                        height: 21.79,
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 60.w,
+                        height: 60.h,
+                        child: Center(
+                          child: Image(
+                            image: index != 2
+                                ? const AssetImage("images/bottomkitchen.png")
+                                : const AssetImage("images/Ordersfilled.png"),
+                            height: 16.h,
+                          ),
+                        ),
                       ),
                     ),
                     InkWell(
@@ -109,11 +135,19 @@ class _BottomBarScreenState extends State<BottomBarScreen> {
                         pagecontroller.jumpToPage(3);
                         setState(() {});
                       },
-                      child: Image(
-                        image: index != 3
-                            ? const AssetImage("images/bottomprofile.png")
-                            : const AssetImage("images/profilefilled (2).png"),
-                        height: 17.25,
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 60.w,
+                        height: 60.h,
+                        child: Center(
+                          child: Image(
+                            image: index != 3
+                                ? const AssetImage("images/bottomprofile.png")
+                                : const AssetImage(
+                                    "images/profilefilled (2).png"),
+                            height: 16.h,
+                          ),
+                        ),
                       ),
                     ),
                   ],

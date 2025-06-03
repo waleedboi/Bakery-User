@@ -1,3 +1,4 @@
+import 'package:completefoodorderingappui/view/bottombar/bottombar.dart';
 import 'package:completefoodorderingappui/view/home/myprofile/myprofile.dart';
 import 'package:completefoodorderingappui/view/widget/buttons.dart';
 import 'package:completefoodorderingappui/utilis/utilis.dart';
@@ -10,17 +11,19 @@ class ContactSupportSuccessScreen extends StatefulWidget {
   const ContactSupportSuccessScreen({super.key});
 
   @override
-  State<ContactSupportSuccessScreen> createState() => _ContactSupportSuccessScreenState();
+  State<ContactSupportSuccessScreen> createState() =>
+      _ContactSupportSuccessScreenState();
 }
 
-class _ContactSupportSuccessScreenState extends State<ContactSupportSuccessScreen> {
+class _ContactSupportSuccessScreenState
+    extends State<ContactSupportSuccessScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         height: ScreenUtil().screenHeight,
         width: ScreenUtil().screenWidth,
-        color: Color(0xffEEEEE6),
+        color: const Color(0xffEEEEE6),
         child: Column(
           children: [
             SizedBox(
@@ -28,13 +31,13 @@ class _ContactSupportSuccessScreenState extends State<ContactSupportSuccessScree
             ),
             AppBarClass(
               text: 'Contact Support',
-              color: Color(0xff20402A),
-              iconcolor: Color(0xff1B4332),
+              color: const Color(0xff20402A),
+              iconcolor: const Color(0xff1B4332),
             ),
             SizedBox(
               height: 112.h,
             ),
-            Image(image: AssetImage("images/Group 14055.png")),
+            const Image(image: AssetImage("images/Group 14055.png")),
             SizedBox(
               height: 56.h,
             ),
@@ -44,7 +47,7 @@ class _ContactSupportSuccessScreenState extends State<ContactSupportSuccessScree
               style: TextStyle(
                 fontSize: 18.sp,
                 fontWeight: FontWeight.w600,
-                color: Color(0xff20402A),
+                color: const Color(0xff20402A),
               ),
             ),
             SizedBox(
@@ -56,32 +59,30 @@ class _ContactSupportSuccessScreenState extends State<ContactSupportSuccessScree
               style: TextStyle(
                 fontSize: 14.sp,
                 fontWeight: FontWeight.w400,
-                color: Color(0xff7D7D79),
+                color: const Color(0xff7D7D79),
               ),
             ),
-             SizedBox(
+            SizedBox(
               height: 36.h,
             ),
-                CustomButtons(
+            CustomButtons(
               borderRadius: 7.78.r,
+              width: 277.w,
+              height: 42.h,
+              onPressed: () {
+                Get.offAll(() => const BottomBarScreen());
+              },
+              backcolor: const Color(0xffE7EADE),
               child: ButtonText(
-                color: Color(0xff20402A),
+                color: const Color(0xff20402A),
                 text: 'Go to Home Page',
                 Font: FontWeight.w500,
                 fontsize: 14.sp,
               ),
-              width: 277.w,
-              height: 42.h,
-              onPressed: () {
-                Get.to(() => MyProfileScreen());
-              },
-              backcolor: Color(0xffE7EADE),
             ),
-          
           ],
         ),
       ),
-   
     );
   }
 }

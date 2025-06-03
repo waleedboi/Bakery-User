@@ -28,6 +28,17 @@ class FavoritiesSecondScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        primary: true,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: const Color(0xff20402A),
+        title: const Padding(
+          padding: EdgeInsets.only(left: 20.0),
+          child: Text("Your Favourite Stores",style: TextStyle(color: Colors.white),),
+        ),
+      ),
       backgroundColor: const Color(0xffEEEEE6),
       body: StreamBuilder<List<BakeryModel>>(
         stream: getFavoriteBakeries(),

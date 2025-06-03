@@ -67,7 +67,7 @@ class _BakeryListItemState extends State<BakeryListItem> {
     return GestureDetector(
       onTap: widget.onTap,
       child: Padding(
-        padding: EdgeInsets.only(left: 23.w, right: 23.w, bottom: 15.h),
+        padding: EdgeInsets.only(left: 23.w, right: 23.w, bottom: 15.h,top: 20),
         child: Card(
           elevation: 0,
           margin: EdgeInsets.zero,
@@ -141,8 +141,8 @@ class _BakeryListItemState extends State<BakeryListItem> {
                 GestureDetector(
                   onTap: toggleFavorite,
                   child: Container(
-                    height: 27.h,
-                    width: 27.w,
+                    height: 35.h,
+                    width: 35.w,
                     decoration: BoxDecoration(
                       color: const Color(0xff383736).withOpacity(0.8),
                       shape: BoxShape.circle,
@@ -150,7 +150,7 @@ class _BakeryListItemState extends State<BakeryListItem> {
                     child: Icon(
                       isFavorite ? Icons.favorite : Icons.favorite_border,
                       color: isFavorite ? Colors.red : Colors.white,
-                      size: 20,
+                      size: 25,
                     ),
                   ),
                 ),

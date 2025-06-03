@@ -1,14 +1,11 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:completefoodorderingappui/utilis/utilis.dart';
-import 'package:completefoodorderingappui/view/home/myprofile/controllers/controller-myinfo.dart';
-import 'package:completefoodorderingappui/view/splash/controller.dart';
 import 'package:completefoodorderingappui/view/widget/buttons.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 
 class MyInfoScreen extends StatefulWidget {
@@ -24,7 +21,8 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
   bool isLoading = true;
   final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
-  
+  String? imageUrl;
+
   @override
   void initState() {
     super.initState();
@@ -44,14 +42,11 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
 
       if (userDoc.exists) {
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
-        
+
         setState(() {
           nameController.text = userData['name'] ?? "";
           emailController.text = userData['email'] ?? "";
-          
-          final MyInfoController controller = Get.find<MyInfoController>();
-          controller.namecontroller.text = nameController.text;
-          controller.emailcontroller.text = emailController.text;
+          imageUrl = userData['imageurl'];
         });
       }
     } catch (e) {
@@ -68,7 +63,7 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
       });
     }
   }
-  
+
   void _pickImage() async {
     try {
       image = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -91,25 +86,25 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
     });
 
     try {
-      final MyInfoController controller = Get.find<MyInfoController>();
-    
       Map<String, dynamic> updateData = {
-        "name": controller.namecontroller.text,
-        "email": controller.emailcontroller.text,
+        "name": nameController.text,
+        "email": emailController.text,
       };
+
       if (image != null) {
         final file = File(image!.path);
         final metadata = SettableMetadata(contentType: "image/jpeg");
         final storageRef = FirebaseStorage.instance.ref();
         final uploadTask = storageRef
-            .child("images/${DateTime.now().millisecondsSinceEpoch}_${image!.name}")
+            .child(
+                "images/${DateTime.now().millisecondsSinceEpoch}_${image!.name}")
             .putFile(file, metadata);
 
         TaskSnapshot taskSnapshot = await uploadTask;
         String url = await taskSnapshot.ref.getDownloadURL();
-        
+
         updateData["imageurl"] = url;
-        SplashScreenController.obj.userModel!.imageurl = url;
+        imageUrl = url;
       }
 
       await FirebaseFirestore.instance
@@ -143,9 +138,8 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
   Widget _buildProfileImage() {
     final userImage = image != null
         ? FileImage(File(image!.path)) as ImageProvider
-        : (SplashScreenController.obj.userModel?.imageurl != null &&
-                SplashScreenController.obj.userModel!.imageurl!.isNotEmpty
-            ? NetworkImage(SplashScreenController.obj.userModel!.imageurl!)
+        : (imageUrl != null && imageUrl!.isNotEmpty
+            ? NetworkImage(imageUrl!)
             : null);
 
     return Stack(
@@ -201,96 +195,88 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: GetBuilder<MyInfoController>(
-        builder: (obj) {
-          obj.namecontroller = nameController;
-          obj.emailcontroller = emailController;
-          
-          return Container(
-            height: ScreenUtil().screenHeight,
-            width: ScreenUtil().screenWidth,
-            color: const Color(0xffEEEEE6),
-            child: isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: Color(0xff1B4332),
-                    ),
-                  )
-                : Form(
-                    key: formkey,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          SizedBox(height: 55.h),
-                          AppBarClass(
-                            text: "My Infos",
-                            color: const Color(0xff20402A),
-                            iconcolor: const Color(0xff1B4332),
-                          ),
-                          SizedBox(height: 30.h),
-                          
-                          Center(child: _buildProfileImage()),
-                          SizedBox(height: 30.h),
-                          TextFormFieldWidget(
-                            onChanged: (v) {
-                              setState(() {});
-                            },
-                            textEditingController: obj.namecontroller,
-                            text: "Name",
-                            width: 319.w,
-                            validator: (value) {
-                              if (value!.isEmpty) {
-                                return "Please enter Name";
-                              }
-                              return null;
-                            },
-                            align: TextAlign.start,
-                            Fontsize: 16.sp,
-                          ),
-                          SizedBox(height: 20.h),
-                          TextFormFieldWidget(
-                            onChanged: (v) {
-                              setState(() {});
-                            },
-                            textEditingController: obj.emailcontroller,
-                            text: "Email",
-                            width: 319.w,
-                            validator: (value) {
-                              bool emailValidator = RegExp(
-                                      r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+")
-                                  .hasMatch(value!);
-                              if (value.isEmpty) {
-                                return "Please enter Email";
-                              }
-                              if (!emailValidator) {
-                                return "Please enter valid Email";
-                              }
-                              return null;
-                            },
-                            align: TextAlign.start,
-                            Fontsize: 16.sp,
-                          ),
-                          SizedBox(height: 30.h),
-                          CustomButtons(
-                            borderRadius: 7.78.r,
-                            width: 319.w,
-                            height: 45.h,
-                            backcolor: const Color(0xff1B4332),
-                            onPressed: _saveUserData,
-                            child: ButtonText(
-                              color: const Color(0xffFBFBF0),
-                              text: 'Save Changes',
-                              Font: FontWeight.w600,
-                              fontsize: 16.sp,
-                            ),
-                          ),
-                          SizedBox(height: 20.h),
-                        ],
+      body: Container(
+        height: ScreenUtil().screenHeight,
+        width: ScreenUtil().screenWidth,
+        color: const Color(0xffEEEEE6),
+        child: isLoading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xff1B4332),
+                ),
+              )
+            : Form(
+                key: formkey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      SizedBox(height: 55.h),
+                      AppBarClass(
+                        text: "My Infos",
+                        color: const Color(0xff20402A),
+                        iconcolor: const Color(0xff1B4332),
                       ),
-                    ),
+                      SizedBox(height: 30.h),
+                      Center(child: _buildProfileImage()),
+                      SizedBox(height: 30.h),
+                      TextFormFieldWidget(
+                        onChanged: (v) {
+                          setState(() {});
+                        },
+                        textEditingController: nameController,
+                        text: "Name",
+                        width: 319.w,
+                        validator: (value) {
+                          if (value!.isEmpty) {
+                            return "Please enter Name";
+                          }
+                          return null;
+                        },
+                        align: TextAlign.start,
+                        Fontsize: 16.sp,
+                      ),
+                      SizedBox(height: 20.h),
+                      TextFormFieldWidget(
+                        onChanged: (v) {
+                          setState(() {});
+                        },
+                        textEditingController: emailController,
+                        text: "Email",
+                        width: 319.w,
+                        validator: (value) {
+                          bool emailValidator = RegExp(
+                                  r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+")
+                              .hasMatch(value!);
+                          if (value.isEmpty) {
+                            return "Please enter Email";
+                          }
+                          if (!emailValidator) {
+                            return "Please enter valid Email";
+                          }
+                          return null;
+                        },
+                        align: TextAlign.start,
+                        Fontsize: 16.sp,
+                      ),
+                      SizedBox(height: 30.h),
+                      CustomButtons(
+                        borderRadius: 7.78.r,
+                        width: 319.w,
+                        height: 45.h,
+                        backcolor: const Color(0xff1B4332),
+                        onPressed: _saveUserData,
+                        child: ButtonText(
+                          color: const Color(0xffFBFBF0),
+                          text: 'Save Changes',
+                          Font: FontWeight.w600,
+                          fontsize: 16.sp,
+                        ),
+                      ),
+                      SizedBox(height: 20.h),
+                    ],
                   ),
-          );
-        },
+                ),
+              ),
       ),
     );
   }
